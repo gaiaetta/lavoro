@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Presenze e Cartellino</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #2980b9;
+            --bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --border: #e2e8f0;
+            --success: #27ae60;
+            --danger: #c0392b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        header p {
+            font-size: 0.9rem;
+            opacity: 0.85;
+            margin-top: 5px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            color: var(--primary);
+            margin-bottom: 15px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .action-zone {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-box strong {
+            color: var(--accent);
+        }
+
+        .btn {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .btn:hover { background-color: #1f6391; }
+        .btn-success { background-color: var(--success); }
+        .btn-success:hover { background-color: #219150; }
+        .btn-secondary { background-color: #7f8c8d; }
+        .btn-secondary:hover { background-color: #6c7a7d; }
+
+        .table-container { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background-color: #f8fafc;
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        tr:hover { background-color: #f8fafc; }
+
+        input[type="time"], input[type="date"] {
+            padding: 5px 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.88rem;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .summary-card span {
+            display: block;
+            font-size: 0.85rem;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .summary-card div {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+
+        .toolbar-left, .toolbar-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Registro Presenze Lavorative</h1>
+        <p>Contratto: 30 Ore Settimanali (5 Giorni)</p>
+    </header>
+
+    <div class="card">
+        <h2>Timbratura Giornaliera</h2>
+        <div class="action-zone">
+            <div class="status-box">
+                Oggi (<span id="current-date-str">--/--/----</span>): 
+                Ingresso automatico impostato alle <strong>08:30</strong>
+            </div>
+            <button class="btn btn-success" onclick="segnaUscitaOggi()">
+                Segna Uscita Ora
+            </button>
+        </div>
+    </div>
+
+    <div class="summary-cards">
+        <div class="summary-card">
+            <span>Mese Selezionato</span>
+            <div id="summary-month">--</div>
+        </div>
+        <div class="summary-card">
+            <span>Ore Lavorate Totali</span>
+            <div id="summary-worked">0h 0m</div>
+        </div>
+        <div class="summary-card">
+            <span>Ore Contrattuali</span>
+            <div id="summary-target">0h</div>
+        </div>
+        <div class="summary-card">
+            <span>Bilancio / Straordinari</span>
+            <div id="summary-diff">0h 0m</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <label for="month-select"><strong>Mese:</strong></label>
+                <input type="month" id="month-select" onchange="caricaMese()">
+            </div>
+            <div class="toolbar-right">
+                <button class="btn btn-secondary" onclick="aggiungiRigaGiorno()">+ Aggiungi Giorno</button>
+                <button class="btn" onclick="esportaPDF()">Esporta PDF per Datore</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Giorno</th>
+                        <th>Ingresso</th>
+                        <th>Uscita</th>
+                        <th>Pausa (min)</th>
+                        <th>Ore Lavorate</th>
+                        <th>Azione</th>
+                    </tr>
+                </thead>
+                <tbody id="attendance-tbody">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const DAYS_IT = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+        let currentYearMonth = '';
+
+        window.onload = function() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            currentYearMonth = `${yyyy}-${mm}`;
+            
+            document.getElementById('month-select').value = currentYearMonth;
+            document.getElementById('current-date-str').innerText = formatDateIT(today.toISOString().split('T')[0]);
+
+            inizializzaMese(currentYearMonth);
+            caricaMese();
+        };
+
+        function formatDateIT(dateStr) {
+            if(!dateStr) return '';
+            const parts = dateStr.split('-');
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        function getStorageKey(yearMonth) {
+            return `presenze_${yearMonth}`;
+        }
+
+        function inizializzaMese(yearMonth) {
+            const storageKey = getStorageKey(yearMonth);
+            if (localStorage.getItem(storageKey)) return;
+
+            const [year, month] = yearMonth.split('-').map(Number);
+            const daysInMonth = new Date(year, month, 0).getDate();
+            const data = [];
+
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dayStr = String(d).padStart(2, '0');
+                const fullDate = `${yearMonth}-${dayStr}`;
+                const dateObj = new Date(year, month - 1, d);
+                const dayOfWeek = dateObj.getDay();
+
+                let ingresso = '';
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    ingresso = '08:30'; // Entrata automatica dal lunedì al venerdì
+                }
+
+                data.push({
+                    date: fullDate,
+                    ingresso: ingresso,
+                    uscita: '',
+                    pausa: 0
+                });
+            }
+
+            localStorage.setItem(storageKey, JSON.stringify(data));
+        }
+
+        function caricaMese() {
+            currentYearMonth = document.getElementById('month-select').value;
+            if (!currentYearMonth) return;
+
+            inizializzaMese(currentYearMonth);
+            const storageKey = getStorageKey(currentYearMonth);
+            const data = JSON.parse(localStorage.getItem(storageKey)) || [];
+
+            const tbody = document.getElementById('attendance-tbody');
+            tbody.innerHTML = '';
+
+            let minTotaliLavorati = 0;
+            let giorniLavorativiConteggiati = 0;
+
+            data.sort((a, b) => a.date.localeCompare(b.date));
+
+            data.forEach((row, index) => {
+                const dateObj = new Date(row.date);
+                const dayOfWeek = dateObj.getDay();
+                const dayName = DAYS_IT[dayOfWeek] || '';
+
+                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, row.pausa);
+                minTotaliLavorati += minutiLavorati;
+
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                    giorniLavorativiConteggiati++;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatDateIT(row.date)}</td>
+                    <td><strong>${dayName}</strong></td>
+                    <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
+                    <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
+                    <td><input type="number" min="0" style="width: 60px;" value="${row.pausa || 0}" onchange="aggiornaDato(${index}, 'pausa', this.value)"></td>
+                    <td><strong>${formattareMinuti(minutiLavorati)}</strong></td>
+                    <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Target basato sul contratto da 30 ore
+            const targetMinuti = (giorniLavorativiConteggiati / 5) * 30 * 60;
+            const diffMinuti = minTotaliLavorati - targetMinuti;
+
+            document.getElementById('summary-month').innerText = currentYearMonth;
+            document.getElementById('summary-worked').innerText = formattareMinuti(minTotaliLavorati);
+            document.getElementById('summary-target').innerText = `${Math.round(targetMinuti / 60)}h`;
+            
+            const diffEl = document.getElementById('summary-diff');
+            if (diffMinuti >= 0) {
+                diffEl.innerText = `+${formattareMinuti(diffMinuti)}`;
+                diffEl.style.color = 'var(--success)';
+            } else {
+                diffEl.innerText = `-${formattareMinuti(Math.abs(diffMinuti))}`;
+                diffEl.style.color = 'var(--danger)';
+            }
+        }
+
+        function calcolaMinuti(ingresso, uscita, pausa) {
+            if (!ingresso || !uscita) return 0;
+            const [hIn, mIn] = ingresso.split(':').map(Number);
+            const [hOut, mOut] = uscita.split(':').map(Number);
+            
+            let minIn = hIn * 60 + mIn;
+            let minOut = hOut * 60 + mOut;
+            let p = parseInt(pausa) || 0;
+
+            if (minOut < minIn) return 0;
+            return Math.max(0, (minOut - minIn) - p);
+        }
+
+        function formattareMinuti(minutiTot) {
+            const h = Math.floor(minutiTot / 60);
+            const m = minutiTot % 60;
+            return `${h}h ${m < 10 ? '0' : ''}${m}m`;
+        }
+
+        function aggiornaDato(index, campo, valore) {
+            const storageKey = getStorageKey(currentYearMonth);
+            const data = JSON.parse(localStorage.getItem(storageKey)) || [];
+            data[index][campo] = valore;
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            caricaMese();
+        }
+
+        function segnaUscitaOggi() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const dateStr = `${yyyy}-${mm}-${dd}`;
+            const yearMonth = `${yyyy}-${mm}`;
+
+            const storageKey = getStorageKey(yearMonth);
+            let data = JSON.parse(localStorage.getItem(storageKey)) || [];
+
+            let row = data.find(d => d.date === dateStr);
+            const nowTime = `${String(today.getHours()).padStart(2, '0')}:${String(today.getMinutes()).padStart(2, '0')}`;
+
+            if (row) {
+                if (!row.ingresso) row.ingresso = '08:30';
+                row.uscita = nowTime;
+            } else {
+                data.push({ date: dateStr, ingresso: '08:30', uscita: nowTime, pausa: 0 });
+            }
+
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            document.getElementById('month-select').value = yearMonth;
+            caricaMese();
+            alert(`Uscita registrata alle ${nowTime}`);
+        }
+
+        function aggiungiRigaGiorno() {
+            const dateInput = prompt("Inserisci la data (YYYY-MM-DD):", `${currentYearMonth}-01`);
+            if (!dateInput) return;
+
+            const storageKey = getStorageKey(currentYearMonth);
+            let data = JSON.parse(localStorage.getItem(storageKey)) || [];
+
+            data.push({ date: dateInput, ingresso: '08:30', uscita: '13:30', pausa: 0 });
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            caricaMese();
+        }
+
+        function eliminaRiga(index) {
+            if (!confirm("Vuoi eliminare questo giorno dal conteggio?")) return;
+            const storageKey = getStorageKey(currentYearMonth);
+            let data = JSON.parse(localStorage.getItem(storageKey)) || [];
+            data.splice(index, 1);
+            localStorage.setItem(storageKey, JSON.stringify(data));
+            caricaMese();
+        }
+
+        function esportaPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const storageKey = getStorageKey(currentYearMonth);
+            const data = JSON.parse(localStorage.getItem(storageKey)) || [];
+            data.sort((a, b) => a.date.localeCompare(b.date));
+
+            // Intestazione formale del PDF
+            doc.setFontSize(16);
+            doc.setTextColor(44, 62, 80);
+            doc.text("Riepilogo Presenze e Ore Lavorate", 14, 20);
+
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.text(`Mese di riferimento: ${currentYearMonth}`, 14, 28);
+            doc.text(`Contratto: 30 ore settimanali`, 14, 34);
+
+            let totalMinuti = 0;
+            const tableRows = [];
+
+            data.forEach(row => {
+                if (!row.ingresso && !row.uscita) return; // Esclude i giorni non lavorati/vuoti
+
+                const dateObj = new Date(row.date);
+                const dayName = DAYS_IT[dateObj.getDay()] || '';
+                const min = calcolaMinuti(row.ingresso, row.uscita, row.pausa);
+                totalMinuti += min;
+
+                tableRows.push([
+                    formatDateIT(row.date),
+                    dayName,
+                    row.ingresso || '-',
+                    row.uscita || '-',
+                    row.pausa ? `${row.pausa} min` : '0 min',
+                    formattareMinuti(min)
+                ]);
+            });
+
+            doc.autoTable({
+                startY: 42,
+                head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Pausa', 'Ore Lavorate']],
+                body: tableRows,
+                theme: 'striped',
+                headStyles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold' },
+                styles: { fontSize: 9, cellPadding: 3 },
+            });
+
+            const finalY = doc.lastAutoTable.finalY + 10;
+            doc.setFontSize(11);
+            doc.setTextColor(0);
+            doc.text(`Totale Ore Lavorate nel Mese: ${formattareMinuti(totalMinuti)}`, 14, finalY);
+
+            doc.save(`Presenze_${currentYearMonth}.pdf`);
+        }
+    </script>
+</body>
+</html>
