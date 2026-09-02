@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestione Presenze e Cartellino</title>
+    <!-- jsPDF e autoTable per esportazione PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
@@ -179,6 +180,7 @@
         <p>Contratto: 30 Ore Settimanali (5 Giorni)</p>
     </header>
 
+    <!-- Card Timbratura Rapida -->
     <div class="card">
         <h2>Timbratura Giornaliera</h2>
         <div class="action-zone">
@@ -192,6 +194,7 @@
         </div>
     </div>
 
+    <!-- Riepilogo Ore -->
     <div class="summary-cards">
         <div class="summary-card">
             <span>Mese Selezionato</span>
@@ -205,12 +208,9 @@
             <span>Ore Contrattuali</span>
             <div id="summary-target">0h</div>
         </div>
-        <div class="summary-card">
-            <span>Bilancio / Straordinari</span>
-            <div id="summary-diff">0h 0m</div>
-        </div>
     </div>
 
+    <!-- Tabella e Controlli -->
     <div class="card">
         <div class="toolbar">
             <div class="toolbar-left">
@@ -231,13 +231,13 @@
                         <th>Giorno</th>
                         <th>Ingresso</th>
                         <th>Uscita</th>
-                        <th>Pausa (min)</th>
                         <th>Ore Lavorate</th>
                         <th>Azione</th>
                     </tr>
                 </thead>
                 <tbody id="attendance-tbody">
-                    </tbody>
+                    <!-- Contenuto dinamico -->
+                </tbody>
             </table>
         </div>
     </div>
@@ -291,8 +291,7 @@
                 data.push({
                     date: fullDate,
                     ingresso: ingresso,
-                    uscita: '',
-                    pausa: 0
+                    uscita: ''
                 });
             }
 
@@ -320,7 +319,7 @@
                 const dayOfWeek = dateObj.getDay();
                 const dayName = DAYS_IT[dayOfWeek] || '';
 
-                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, row.pausa);
+                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita);
                 minTotaliLavorati += minutiLavorati;
 
                 if (dayOfWeek >= 1 && dayOfWeek <= 5) {
@@ -333,7 +332,6 @@
                     <td><strong>${dayName}</strong></td>
                     <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
                     <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
-                    <td><input type="number" min="0" style="width: 60px;" value="${row.pausa || 0}" onchange="aggiornaDato(${index}, 'pausa', this.value)"></td>
                     <td><strong>${formattareMinuti(minutiLavorati)}</strong></td>
                     <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
                 `;
@@ -342,33 +340,22 @@
 
             // Target basato sul contratto da 30 ore
             const targetMinuti = (giorniLavorativiConteggiati / 5) * 30 * 60;
-            const diffMinuti = minTotaliLavorati - targetMinuti;
 
             document.getElementById('summary-month').innerText = currentYearMonth;
             document.getElementById('summary-worked').innerText = formattareMinuti(minTotaliLavorati);
             document.getElementById('summary-target').innerText = `${Math.round(targetMinuti / 60)}h`;
-            
-            const diffEl = document.getElementById('summary-diff');
-            if (diffMinuti >= 0) {
-                diffEl.innerText = `+${formattareMinuti(diffMinuti)}`;
-                diffEl.style.color = 'var(--success)';
-            } else {
-                diffEl.innerText = `-${formattareMinuti(Math.abs(diffMinuti))}`;
-                diffEl.style.color = 'var(--danger)';
-            }
         }
 
-        function calcolaMinuti(ingresso, uscita, pausa) {
+        function calcolaMinuti(ingresso, uscita) {
             if (!ingresso || !uscita) return 0;
             const [hIn, mIn] = ingresso.split(':').map(Number);
             const [hOut, mOut] = uscita.split(':').map(Number);
             
             let minIn = hIn * 60 + mIn;
             let minOut = hOut * 60 + mOut;
-            let p = parseInt(pausa) || 0;
 
             if (minOut < minIn) return 0;
-            return Math.max(0, (minOut - minIn) - p);
+            return minOut - minIn;
         }
 
         function formattareMinuti(minutiTot) {
@@ -403,7 +390,7 @@
                 if (!row.ingresso) row.ingresso = '08:30';
                 row.uscita = nowTime;
             } else {
-                data.push({ date: dateStr, ingresso: '08:30', uscita: nowTime, pausa: 0 });
+                data.push({ date: dateStr, ingresso: '08:30', uscita: nowTime });
             }
 
             localStorage.setItem(storageKey, JSON.stringify(data));
@@ -419,7 +406,7 @@
             const storageKey = getStorageKey(currentYearMonth);
             let data = JSON.parse(localStorage.getItem(storageKey)) || [];
 
-            data.push({ date: dateInput, ingresso: '08:30', uscita: '13:30', pausa: 0 });
+            data.push({ date: dateInput, ingresso: '08:30', uscita: '13:30' });
             localStorage.setItem(storageKey, JSON.stringify(data));
             caricaMese();
         }
@@ -455,11 +442,11 @@
             const tableRows = [];
 
             data.forEach(row => {
-                if (!row.ingresso && !row.uscita) return; // Esclude i giorni non lavorati/vuoti
+                if (!row.ingresso && !row.uscita) return;
 
                 const dateObj = new Date(row.date);
                 const dayName = DAYS_IT[dateObj.getDay()] || '';
-                const min = calcolaMinuti(row.ingresso, row.uscita, row.pausa);
+                const min = calcolaMinuti(row.ingresso, row.uscita);
                 totalMinuti += min;
 
                 tableRows.push([
@@ -467,14 +454,13 @@
                     dayName,
                     row.ingresso || '-',
                     row.uscita || '-',
-                    row.pausa ? `${row.pausa} min` : '0 min',
                     formattareMinuti(min)
                 ]);
             });
 
             doc.autoTable({
                 startY: 42,
-                head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Pausa', 'Ore Lavorate']],
+                head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Ore Lavorate']],
                 body: tableRows,
                 theme: 'striped',
                 headStyles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold' },
