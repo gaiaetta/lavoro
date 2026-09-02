@@ -132,7 +132,7 @@
 
         .summary-cards {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -153,7 +153,7 @@
         }
 
         .summary-card div {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: bold;
             color: var(--primary);
         }
@@ -197,16 +197,20 @@
     <!-- Riepilogo Ore -->
     <div class="summary-cards">
         <div class="summary-card">
-            <span>Mese Selezionato</span>
-            <div id="summary-month">--</div>
+            <span>Ore Lavorate (Settimana)</span>
+            <div id="summary-worked-week">0h 0m</div>
         </div>
         <div class="summary-card">
-            <span>Ore Lavorate Totali</span>
-            <div id="summary-worked">0h 0m</div>
+            <span>Contrattuali (Settimana)</span>
+            <div>30h</div>
         </div>
         <div class="summary-card">
-            <span>Ore Contrattuali</span>
-            <div id="summary-target">0h</div>
+            <span>Ore Lavorate (Mese)</span>
+            <div id="summary-worked-month">0h 0m</div>
+        </div>
+        <div class="summary-card">
+            <span>Contrattuali (Mese)</span>
+            <div id="summary-target-month">0h</div>
         </div>
     </div>
 
@@ -298,6 +302,14 @@
             localStorage.setItem(storageKey, JSON.stringify(data));
         }
 
+        function getWeekNumber(d) {
+            d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+            var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            var weekNo = Math.ceil(( ( (d - yearStart) / 86400000) + 1)/7);
+            return weekNo;
+        }
+
         function caricaMese() {
             currentYearMonth = document.getElementById('month-select').value;
             if (!currentYearMonth) return;
@@ -309,8 +321,12 @@
             const tbody = document.getElementById('attendance-tbody');
             tbody.innerHTML = '';
 
-            let minTotaliLavorati = 0;
+            let minTotaliMese = 0;
+            let minTotaliSettimana = 0;
             let giorniLavorativiConteggiati = 0;
+
+            const today = new Date();
+            const currentWeekNumber = getWeekNumber(today);
 
             data.sort((a, b) => a.date.localeCompare(b.date));
 
@@ -320,7 +336,12 @@
                 const dayName = DAYS_IT[dayOfWeek] || '';
 
                 const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita);
-                minTotaliLavorati += minutiLavorati;
+                minTotaliMese += minutiLavorati;
+
+                // Calcolo ore della settimana corrente
+                if (getWeekNumber(dateObj) === currentWeekNumber && dateObj.getFullYear() === today.getFullYear()) {
+                    minTotaliSettimana += minutiLavorati;
+                }
 
                 if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                     giorniLavorativiConteggiati++;
@@ -338,12 +359,12 @@
                 tbody.appendChild(tr);
             });
 
-            // Target basato sul contratto da 30 ore
-            const targetMinuti = (giorniLavorativiConteggiati / 5) * 30 * 60;
+            // Target contrattuale mensile (30h/settimana = 6h medio al giorno per i giorni lavorativi del mese)
+            const targetMinutiMese = (giorniLavorativiConteggiati / 5) * 30 * 60;
 
-            document.getElementById('summary-month').innerText = currentYearMonth;
-            document.getElementById('summary-worked').innerText = formattareMinuti(minTotaliLavorati);
-            document.getElementById('summary-target').innerText = `${Math.round(targetMinuti / 60)}h`;
+            document.getElementById('summary-worked-week').innerText = formattareMinuti(minTotaliSettimana);
+            document.getElementById('summary-worked-month').innerText = formattareMinuti(minTotaliMese);
+            document.getElementById('summary-target-month').innerText = `${Math.round(targetMinutiMese / 60)}h`;
         }
 
         function calcolaMinuti(ingresso, uscita) {
