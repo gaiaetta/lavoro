@@ -306,7 +306,7 @@
                     date: fullDate,
                     ingresso: ingresso,
                     uscita: '',
-                    pausa: false // False indica nessuna pausa, True indica 1 ora di pausa
+                    pausa: false
                 });
             }
 
@@ -477,8 +477,9 @@
             doc.text(`Mese di riferimento: ${currentYearMonth}`, 14, 28);
             doc.text(`Contratto: 30 ore settimanali`, 14, 34);
 
-            let totalMinuti = 0;
+            let totalMinutiMese = 0;
             const tableRows = [];
+            const orePerSettimana = {}; // Raggruppamento minuti per numero settimana ISO
 
             data.forEach(row => {
                 if (!row.ingresso && !row.uscita) return;
@@ -487,7 +488,14 @@
                 const dayName = DAYS_IT[dateObj.getDay()] || '';
                 const haFattoPausa = Boolean(row.pausa);
                 const min = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
-                totalMinuti += min;
+                totalMinutiMese += min;
+
+                // Calcolo raggruppamento per settimana del mese
+                const weekNum = getWeekNumber(dateObj);
+                if (!orePerSettimana[weekNum]) {
+                    orePerSettimana[weekNum] = 0;
+                }
+                orePerSettimana[weekNum] += min;
 
                 tableRows.push([
                     formatDateIT(row.date),
@@ -499,8 +507,9 @@
                 ]);
             });
 
+            // Tabella Presenze Giornaliere
             doc.autoTable({
-                startY: 42,
+                startY: 40,
                 head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Pausa', 'Ore Lavorate']],
                 body: tableRows,
                 theme: 'striped',
@@ -508,10 +517,43 @@
                 styles: { fontSize: 9, cellPadding: 3 },
             });
 
-            const finalY = doc.lastAutoTable.finalY + 10;
+            let finalY = doc.lastAutoTable.finalY + 12;
+
+            // Se lo spazio residuo è insufficiente per il riepilogo, crea una nuova pagina
+            if (finalY > 230) {
+                doc.addPage();
+                finalY = 20;
+            }
+
+            // Tabella / Sezione Riepilogo Settimanale e Mensile
+            doc.setFontSize(12);
+            doc.setTextColor(44, 62, 80);
+            doc.text("Riepilogo Ore Lavorate", 14, finalY);
+
+            const summaryRows = [];
+            let indexSettimana = 1;
+            
+            // Ordina le settimane in ordine cronologico
+            Object.keys(orePerSettimana).sort((a,b) => a - b).forEach(weekKey => {
+                summaryRows.push([`Settimana ${indexSettimana} (Sett. ISO ${weekKey})`, formattareMinuti(orePerSettimana[weekKey])]);
+                indexSettimana++;
+            });
+
+            doc.autoTable({
+                startY: finalY + 4,
+                head: [['Periodo', 'Ore Totali']],
+                body: summaryRows,
+                theme: 'plain',
+                headStyles: { fillColor: [220, 224, 230], textColor: [44, 62, 80], fontStyle: 'bold' },
+                styles: { fontSize: 9, cellPadding: 2.5 },
+                columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 } }
+            });
+
+            const summaryFinalY = doc.lastAutoTable.finalY + 8;
+
             doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.text(`Totale Ore Lavorate nel Mese: ${formattareMinuti(totalMinuti)}`, 14, finalY);
+            doc.text(`TOTALE ORE MESI: ${formattareMinuti(totalMinutiMese)}`, 14, summaryFinalY);
 
             doc.save(`Presenze_${currentYearMonth}.pdf`);
         }
