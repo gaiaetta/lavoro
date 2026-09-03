@@ -332,6 +332,39 @@
             const tbody = document.getElementById('attendance-tbody');
             tbody.innerHTML = '';
 
+            data.sort((a, b) => a.date.localeCompare(b.date));
+
+            data.forEach((row, index) => {
+                const dateObj = new Date(row.date);
+                const dayOfWeek = dateObj.getDay();
+                const dayName = DAYS_IT[dayOfWeek] || '';
+
+                const haFattoPausa = Boolean(row.pausa);
+                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
+
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-index', index);
+                tr.innerHTML = `
+                    <td>${formatDateIT(row.date)}</td>
+                    <td><strong>${dayName}</strong></td>
+                    <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
+                    <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" ${haFattoPausa ? 'checked' : ''} onchange="aggiornaDato(${index}, 'pausa', this.checked)">
+                    </td>
+                    <td><strong class="row-worked-time">${formattareMinuti(minutiLavorati)}</strong></td>
+                    <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            ricalcolaTotali();
+        }
+
+        function ricalcolaTotali() {
+            const storageKey = getStorageKey(currentYearMonth);
+            const data = JSON.parse(localStorage.getItem(storageKey)) || [];
+
             let minTotaliMese = 0;
             let minTotaliSettimana = 0;
             let giorniLavorativiConteggiati = 0;
@@ -339,12 +372,9 @@
             const today = new Date();
             const currentWeekNumber = getWeekNumber(today);
 
-            data.sort((a, b) => a.date.localeCompare(b.date));
-
-            data.forEach((row, index) => {
+            data.forEach((row) => {
                 const dateObj = new Date(row.date);
                 const dayOfWeek = dateObj.getDay();
-                const dayName = DAYS_IT[dayOfWeek] || '';
 
                 const haFattoPausa = Boolean(row.pausa);
                 const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
@@ -358,23 +388,8 @@
                 if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                     giorniLavorativiConteggiati++;
                 }
-
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${formatDateIT(row.date)}</td>
-                    <td><strong>${dayName}</strong></td>
-                    <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
-                    <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
-                    <td style="text-align: center;">
-                        <input type="checkbox" ${haFattoPausa ? 'checked' : ''} onchange="aggiornaDato(${index}, 'pausa', this.checked)">
-                    </td>
-                    <td><strong>${formattareMinuti(minutiLavorati)}</strong></td>
-                    <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
-                `;
-                tbody.appendChild(tr);
             });
 
-            // Target contrattuale mensile (30h/settimana = 6h medio al giorno per i giorni lavorativi del mese)
             const targetMinutiMese = (giorniLavorativiConteggiati / 5) * 30 * 60;
 
             document.getElementById('summary-worked-week').innerText = formattareMinuti(minTotaliSettimana);
@@ -406,9 +421,24 @@
         function aggiornaDato(index, campo, valore) {
             const storageKey = getStorageKey(currentYearMonth);
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
+            
             data[index][campo] = valore;
             localStorage.setItem(storageKey, JSON.stringify(data));
-            caricaMese();
+
+            // Aggiorna solo la riga specifica della tabella senza ricreare il DOM
+            const row = data[index];
+            const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, Boolean(row.pausa));
+            
+            const tr = document.querySelector(`tr[data-index="${index}"]`);
+            if (tr) {
+                const timeCell = tr.querySelector('.row-worked-time');
+                if (timeCell) {
+                    timeCell.innerText = formattareMinuti(minutiLavorati);
+                }
+            }
+
+            // Ricalcola solo i totali in alto
+            ricalcolaTotali();
         }
 
         function segnaUscitaOggi() {
@@ -479,7 +509,7 @@
 
             let totalMinutiMese = 0;
             const tableRows = [];
-            const orePerSettimana = {}; // Raggruppamento minuti per numero settimana ISO
+            const orePerSettimana = {};
 
             data.forEach(row => {
                 if (!row.ingresso && !row.uscita) return;
@@ -490,7 +520,6 @@
                 const min = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
                 totalMinutiMese += min;
 
-                // Calcolo raggruppamento per settimana del mese
                 const weekNum = getWeekNumber(dateObj);
                 if (!orePerSettimana[weekNum]) {
                     orePerSettimana[weekNum] = 0;
@@ -519,13 +548,12 @@
 
             let finalY = doc.lastAutoTable.finalY + 12;
 
-            // Se lo spazio residuo è insufficiente per il riepilogo, crea una nuova pagina
             if (finalY > 230) {
                 doc.addPage();
                 finalY = 20;
             }
 
-            // Tabella / Sezione Riepilogo Settimanale e Mensile
+            // Tabella Riepilogo Settimanale e Mensile
             doc.setFontSize(12);
             doc.setTextColor(44, 62, 80);
             doc.text("Riepilogo Ore Lavorate", 14, finalY);
@@ -533,7 +561,6 @@
             const summaryRows = [];
             let indexSettimana = 1;
             
-            // Ordina le settimane in ordine cronologico
             Object.keys(orePerSettimana).sort((a,b) => a - b).forEach(weekKey => {
                 summaryRows.push([`Settimana ${indexSettimana} (Sett. ISO ${weekKey})`, formattareMinuti(orePerSettimana[weekKey])]);
                 indexSettimana++;
@@ -553,7 +580,7 @@
 
             doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.text(`TOTALE ORE MESI: ${formattareMinuti(totalMinutiMese)}`, 14, summaryFinalY);
+            doc.text(`TOTALE ORE MESE: ${formattareMinuti(totalMinutiMese)}`, 14, summaryFinalY);
 
             doc.save(`Presenze_${currentYearMonth}.pdf`);
         }
