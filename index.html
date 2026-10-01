@@ -30,7 +30,7 @@
             background-color: var(--bg);
             color: var(--text);
             padding: 20px;
-            max-width: 1050px;
+            max-width: 1000px;
             margin: 0 auto;
         }
 
@@ -87,8 +87,8 @@
             background-color: var(--accent);
             color: white;
             border: none;
-            padding: 10px 18px;
-            font-size: 0.95rem;
+            padding: 8px 14px;
+            font-size: 0.9rem;
             font-weight: 500;
             border-radius: 5px;
             cursor: pointer;
@@ -123,19 +123,11 @@
 
         tr:hover { background-color: #f8fafc; }
 
-        input[type="time"], input[type="date"] {
+        input[type="time"], input[type="date"], input[type="month"] {
             padding: 5px 8px;
             border: 1px solid var(--border);
             border-radius: 4px;
             font-size: 0.88rem;
-            background-color: #fff;
-        }
-
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: var(--accent);
         }
 
         .summary-cards {
@@ -173,12 +165,28 @@
             margin-bottom: 15px;
             flex-wrap: wrap;
             justify-content: space-between;
+            align-items: center;
         }
 
         .toolbar-left, .toolbar-right {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background-color: #e2e8f0;
+            color: #333;
+            border: 1px solid #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .nav-btn:hover {
+            background-color: #cbd5e1;
         }
     </style>
 </head>
@@ -206,7 +214,7 @@
     <!-- Riepilogo Ore -->
     <div class="summary-cards">
         <div class="summary-card">
-            <span>Riepilogo Settimanale</span>
+            <span>Riepilogo Settimanale (Settimana Corrente)</span>
             <div>
                 <span style="display:inline; color: var(--primary);">Lavorate: <strong id="summary-worked-week">0h 0m</strong></span>
                 <span style="display:inline; margin: 0 8px; color: #ccc;">|</span>
@@ -214,7 +222,7 @@
             </div>
         </div>
         <div class="summary-card">
-            <span>Riepilogo Mensile</span>
+            <span>Riepilogo Mensile (<span id="summary-month-label">--</span>)</span>
             <div>
                 <span style="display:inline; color: var(--primary);">Lavorate: <strong id="summary-worked-month">0h 0m</strong></span>
                 <span style="display:inline; margin: 0 8px; color: #ccc;">|</span>
@@ -227,8 +235,9 @@
     <div class="card">
         <div class="toolbar">
             <div class="toolbar-left">
-                <label for="month-select"><strong>Mese:</strong></label>
+                <button class="nav-btn" onclick="cambiaMese(-1)">◄ Mese Prec.</button>
                 <input type="month" id="month-select" onchange="caricaMese()">
+                <button class="nav-btn" onclick="cambiaMese(1)">Mese Succ. ►</button>
             </div>
             <div class="toolbar-right">
                 <button class="btn btn-secondary" onclick="aggiungiRigaGiorno()">+ Aggiungi Giorno</button>
@@ -244,7 +253,6 @@
                         <th>Giorno</th>
                         <th>Ingresso</th>
                         <th>Uscita</th>
-                        <th style="text-align: center;">Pausa (1h)</th>
                         <th>Ore Lavorate</th>
                         <th>Azione</th>
                     </tr>
@@ -258,6 +266,7 @@
 
     <script>
         const DAYS_IT = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+        const MONTHS_IT = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
         let currentYearMonth = '';
 
         window.onload = function() {
@@ -305,8 +314,7 @@
                 data.push({
                     date: fullDate,
                     ingresso: ingresso,
-                    uscita: '',
-                    pausa: false
+                    uscita: ''
                 });
             }
 
@@ -321,6 +329,17 @@
             return weekNo;
         }
 
+        function cambiaMese(delta) {
+            const [year, month] = currentYearMonth.split('-').map(Number);
+            const d = new Date(year, month - 1 + delta, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            
+            currentYearMonth = `${yyyy}-${mm}`;
+            document.getElementById('month-select').value = currentYearMonth;
+            caricaMese();
+        }
+
         function caricaMese() {
             currentYearMonth = document.getElementById('month-select').value;
             if (!currentYearMonth) return;
@@ -329,41 +348,12 @@
             const storageKey = getStorageKey(currentYearMonth);
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
 
+            // Aggiorna etichetta mese visualizzato
+            const [y, m] = currentYearMonth.split('-').map(Number);
+            document.getElementById('summary-month-label').innerText = `${MONTHS_IT[m - 1]} ${y}`;
+
             const tbody = document.getElementById('attendance-tbody');
             tbody.innerHTML = '';
-
-            data.sort((a, b) => a.date.localeCompare(b.date));
-
-            data.forEach((row, index) => {
-                const dateObj = new Date(row.date);
-                const dayOfWeek = dateObj.getDay();
-                const dayName = DAYS_IT[dayOfWeek] || '';
-
-                const haFattoPausa = Boolean(row.pausa);
-                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
-
-                const tr = document.createElement('tr');
-                tr.setAttribute('data-index', index);
-                tr.innerHTML = `
-                    <td>${formatDateIT(row.date)}</td>
-                    <td><strong>${dayName}</strong></td>
-                    <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
-                    <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
-                    <td style="text-align: center;">
-                        <input type="checkbox" ${haFattoPausa ? 'checked' : ''} onchange="aggiornaDato(${index}, 'pausa', this.checked)">
-                    </td>
-                    <td><strong class="row-worked-time">${formattareMinuti(minutiLavorati)}</strong></td>
-                    <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            ricalcolaTotali();
-        }
-
-        function ricalcolaTotali() {
-            const storageKey = getStorageKey(currentYearMonth);
-            const data = JSON.parse(localStorage.getItem(storageKey)) || [];
 
             let minTotaliMese = 0;
             let minTotaliSettimana = 0;
@@ -372,12 +362,14 @@
             const today = new Date();
             const currentWeekNumber = getWeekNumber(today);
 
-            data.forEach((row) => {
+            data.sort((a, b) => a.date.localeCompare(b.date));
+
+            data.forEach((row, index) => {
                 const dateObj = new Date(row.date);
                 const dayOfWeek = dateObj.getDay();
+                const dayName = DAYS_IT[dayOfWeek] || '';
 
-                const haFattoPausa = Boolean(row.pausa);
-                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
+                const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita);
                 minTotaliMese += minutiLavorati;
 
                 // Calcolo ore della settimana corrente
@@ -388,8 +380,20 @@
                 if (dayOfWeek >= 1 && dayOfWeek <= 5) {
                     giorniLavorativiConteggiati++;
                 }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatDateIT(row.date)}</td>
+                    <td><strong>${dayName}</strong></td>
+                    <td><input type="time" value="${row.ingresso || ''}" onchange="aggiornaDato(${index}, 'ingresso', this.value)"></td>
+                    <td><input type="time" value="${row.uscita || ''}" onchange="aggiornaDato(${index}, 'uscita', this.value)"></td>
+                    <td><strong>${formattareMinuti(minutiLavorati)}</strong></td>
+                    <td><button style="color:var(--danger); border:none; background:none; cursor:pointer;" onclick="eliminaRiga(${index})">✕</button></td>
+                `;
+                tbody.appendChild(tr);
             });
 
+            // Target contrattuale mensile (30h/settimana = 6h medio al giorno per i giorni lavorativi del mese)
             const targetMinutiMese = (giorniLavorativiConteggiati / 5) * 30 * 60;
 
             document.getElementById('summary-worked-week').innerText = formattareMinuti(minTotaliSettimana);
@@ -397,7 +401,7 @@
             document.getElementById('summary-target-month').innerText = `${Math.round(targetMinutiMese / 60)}h`;
         }
 
-        function calcolaMinuti(ingresso, uscita, haFattoPausa = false) {
+        function calcolaMinuti(ingresso, uscita) {
             if (!ingresso || !uscita) return 0;
             const [hIn, mIn] = ingresso.split(':').map(Number);
             const [hOut, mOut] = uscita.split(':').map(Number);
@@ -405,11 +409,8 @@
             let minIn = hIn * 60 + mIn;
             let minOut = hOut * 60 + mOut;
 
-            if (minOut <= minIn) return 0;
-            
-            const minutiPausa = haFattoPausa ? 60 : 0;
-            let totale = (minOut - minIn) - minutiPausa;
-            return totale > 0 ? totale : 0;
+            if (minOut < minIn) return 0;
+            return minOut - minIn;
         }
 
         function formattareMinuti(minutiTot) {
@@ -421,24 +422,9 @@
         function aggiornaDato(index, campo, valore) {
             const storageKey = getStorageKey(currentYearMonth);
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
-            
             data[index][campo] = valore;
             localStorage.setItem(storageKey, JSON.stringify(data));
-
-            // Aggiorna solo la riga specifica della tabella senza ricreare il DOM
-            const row = data[index];
-            const minutiLavorati = calcolaMinuti(row.ingresso, row.uscita, Boolean(row.pausa));
-            
-            const tr = document.querySelector(`tr[data-index="${index}"]`);
-            if (tr) {
-                const timeCell = tr.querySelector('.row-worked-time');
-                if (timeCell) {
-                    timeCell.innerText = formattareMinuti(minutiLavorati);
-                }
-            }
-
-            // Ricalcola solo i totali in alto
-            ricalcolaTotali();
+            caricaMese();
         }
 
         function segnaUscitaOggi() {
@@ -459,7 +445,7 @@
                 if (!row.ingresso) row.ingresso = '08:30';
                 row.uscita = nowTime;
             } else {
-                data.push({ date: dateStr, ingresso: '08:30', uscita: nowTime, pausa: false });
+                data.push({ date: dateStr, ingresso: '08:30', uscita: nowTime });
             }
 
             localStorage.setItem(storageKey, JSON.stringify(data));
@@ -475,7 +461,7 @@
             const storageKey = getStorageKey(currentYearMonth);
             let data = JSON.parse(localStorage.getItem(storageKey)) || [];
 
-            data.push({ date: dateInput, ingresso: '08:30', uscita: '13:30', pausa: false });
+            data.push({ date: dateInput, ingresso: '08:30', uscita: '13:30' });
             localStorage.setItem(storageKey, JSON.stringify(data));
             caricaMese();
         }
@@ -497,7 +483,6 @@
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
             data.sort((a, b) => a.date.localeCompare(b.date));
 
-            // Intestazione formale del PDF
             doc.setFontSize(16);
             doc.setTextColor(44, 62, 80);
             doc.text("Riepilogo Presenze e Ore Lavorate", 14, 20);
@@ -507,80 +492,39 @@
             doc.text(`Mese di riferimento: ${currentYearMonth}`, 14, 28);
             doc.text(`Contratto: 30 ore settimanali`, 14, 34);
 
-            let totalMinutiMese = 0;
+            let totalMinuti = 0;
             const tableRows = [];
-            const orePerSettimana = {};
 
             data.forEach(row => {
                 if (!row.ingresso && !row.uscita) return;
 
                 const dateObj = new Date(row.date);
                 const dayName = DAYS_IT[dateObj.getDay()] || '';
-                const haFattoPausa = Boolean(row.pausa);
-                const min = calcolaMinuti(row.ingresso, row.uscita, haFattoPausa);
-                totalMinutiMese += min;
-
-                const weekNum = getWeekNumber(dateObj);
-                if (!orePerSettimana[weekNum]) {
-                    orePerSettimana[weekNum] = 0;
-                }
-                orePerSettimana[weekNum] += min;
+                const min = calcolaMinuti(row.ingresso, row.uscita);
+                totalMinuti += min;
 
                 tableRows.push([
                     formatDateIT(row.date),
                     dayName,
                     row.ingresso || '-',
                     row.uscita || '-',
-                    haFattoPausa ? '1h' : 'No',
                     formattareMinuti(min)
                 ]);
             });
 
-            // Tabella Presenze Giornaliere
             doc.autoTable({
-                startY: 40,
-                head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Pausa', 'Ore Lavorate']],
+                startY: 42,
+                head: [['Data', 'Giorno', 'Ingresso', 'Uscita', 'Ore Lavorate']],
                 body: tableRows,
                 theme: 'striped',
                 headStyles: { fillColor: [44, 62, 80], textColor: [255, 255, 255], fontStyle: 'bold' },
                 styles: { fontSize: 9, cellPadding: 3 },
             });
 
-            let finalY = doc.lastAutoTable.finalY + 12;
-
-            if (finalY > 230) {
-                doc.addPage();
-                finalY = 20;
-            }
-
-            // Tabella Riepilogo Settimanale e Mensile
-            doc.setFontSize(12);
-            doc.setTextColor(44, 62, 80);
-            doc.text("Riepilogo Ore Lavorate", 14, finalY);
-
-            const summaryRows = [];
-            let indexSettimana = 1;
-            
-            Object.keys(orePerSettimana).sort((a,b) => a - b).forEach(weekKey => {
-                summaryRows.push([`Settimana ${indexSettimana} (Sett. ISO ${weekKey})`, formattareMinuti(orePerSettimana[weekKey])]);
-                indexSettimana++;
-            });
-
-            doc.autoTable({
-                startY: finalY + 4,
-                head: [['Periodo', 'Ore Totali']],
-                body: summaryRows,
-                theme: 'plain',
-                headStyles: { fillColor: [220, 224, 230], textColor: [44, 62, 80], fontStyle: 'bold' },
-                styles: { fontSize: 9, cellPadding: 2.5 },
-                columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40 } }
-            });
-
-            const summaryFinalY = doc.lastAutoTable.finalY + 8;
-
+            const finalY = doc.lastAutoTable.finalY + 10;
             doc.setFontSize(11);
             doc.setTextColor(0);
-            doc.text(`TOTALE ORE MESE: ${formattareMinuti(totalMinutiMese)}`, 14, summaryFinalY);
+            doc.text(`Totale Ore Lavorate nel Mese: ${formattareMinuti(totalMinuti)}`, 14, finalY);
 
             doc.save(`Presenze_${currentYearMonth}.pdf`);
         }
