@@ -87,8 +87,8 @@
             background-color: var(--accent);
             color: white;
             border: none;
-            padding: 8px 14px;
-            font-size: 0.9rem;
+            padding: 10px 18px;
+            font-size: 0.95rem;
             font-weight: 500;
             border-radius: 5px;
             cursor: pointer;
@@ -123,7 +123,7 @@
 
         tr:hover { background-color: #f8fafc; }
 
-        input[type="time"], input[type="date"], input[type="month"] {
+        input[type="time"], input[type="date"] {
             padding: 5px 8px;
             border: 1px solid var(--border);
             border-radius: 4px;
@@ -165,28 +165,12 @@
             margin-bottom: 15px;
             flex-wrap: wrap;
             justify-content: space-between;
-            align-items: center;
         }
 
         .toolbar-left, .toolbar-right {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .nav-btn {
-            background-color: #e2e8f0;
-            color: #333;
-            border: 1px solid #cbd5e1;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        .nav-btn:hover {
-            background-color: #cbd5e1;
         }
     </style>
 </head>
@@ -214,7 +198,7 @@
     <!-- Riepilogo Ore -->
     <div class="summary-cards">
         <div class="summary-card">
-            <span>Riepilogo Settimanale (Settimana Corrente)</span>
+            <span>Riepilogo Settimanale</span>
             <div>
                 <span style="display:inline; color: var(--primary);">Lavorate: <strong id="summary-worked-week">0h 0m</strong></span>
                 <span style="display:inline; margin: 0 8px; color: #ccc;">|</span>
@@ -222,7 +206,7 @@
             </div>
         </div>
         <div class="summary-card">
-            <span>Riepilogo Mensile (<span id="summary-month-label">--</span>)</span>
+            <span>Riepilogo Mensile</span>
             <div>
                 <span style="display:inline; color: var(--primary);">Lavorate: <strong id="summary-worked-month">0h 0m</strong></span>
                 <span style="display:inline; margin: 0 8px; color: #ccc;">|</span>
@@ -235,9 +219,8 @@
     <div class="card">
         <div class="toolbar">
             <div class="toolbar-left">
-                <button class="nav-btn" onclick="cambiaMese(-1)">◄ Mese Prec.</button>
+                <label for="month-select"><strong>Mese:</strong></label>
                 <input type="month" id="month-select" onchange="caricaMese()">
-                <button class="nav-btn" onclick="cambiaMese(1)">Mese Succ. ►</button>
             </div>
             <div class="toolbar-right">
                 <button class="btn btn-secondary" onclick="aggiungiRigaGiorno()">+ Aggiungi Giorno</button>
@@ -266,7 +249,6 @@
 
     <script>
         const DAYS_IT = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-        const MONTHS_IT = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
         let currentYearMonth = '';
 
         window.onload = function() {
@@ -329,17 +311,6 @@
             return weekNo;
         }
 
-        function cambiaMese(delta) {
-            const [year, month] = currentYearMonth.split('-').map(Number);
-            const d = new Date(year, month - 1 + delta, 1);
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            
-            currentYearMonth = `${yyyy}-${mm}`;
-            document.getElementById('month-select').value = currentYearMonth;
-            caricaMese();
-        }
-
         function caricaMese() {
             currentYearMonth = document.getElementById('month-select').value;
             if (!currentYearMonth) return;
@@ -347,10 +318,6 @@
             inizializzaMese(currentYearMonth);
             const storageKey = getStorageKey(currentYearMonth);
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-            // Aggiorna etichetta mese visualizzato
-            const [y, m] = currentYearMonth.split('-').map(Number);
-            document.getElementById('summary-month-label').innerText = `${MONTHS_IT[m - 1]} ${y}`;
 
             const tbody = document.getElementById('attendance-tbody');
             tbody.innerHTML = '';
@@ -483,6 +450,7 @@
             const data = JSON.parse(localStorage.getItem(storageKey)) || [];
             data.sort((a, b) => a.date.localeCompare(b.date));
 
+            // Intestazione formale del PDF
             doc.setFontSize(16);
             doc.setTextColor(44, 62, 80);
             doc.text("Riepilogo Presenze e Ore Lavorate", 14, 20);
